@@ -21,3 +21,4 @@ modelscope
 ninja
 pandas
 scipy
+protobuf
