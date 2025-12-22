@@ -27,6 +27,8 @@ N_INFERENCE_GPU=4 # Parallel inference GPU count.
 REWRITE=false # Enable prompt rewriting. Please ensure rewrite vLLM server is deployed and configured.
 ENABLE_SR=false # Enable super resolution. When the NUM_FRAMES <= 121, you can set it to true
 
+# export CCL_LOG_LEVEL=debug
+
 # inference with bidirectional model
 torchrun --nproc_per_node=$N_INFERENCE_GPU generate.py  \
   --prompt "$PROMPT" \
@@ -41,10 +43,10 @@ torchrun --nproc_per_node=$N_INFERENCE_GPU generate.py  \
   --output_path $OUTPUT_PATH \
   --model_path $MODEL_PATH \
   --action_ckpt $BI_ACTION_MODEL_PATH \
-  --few_step false \
+  --few_step true \
   --width $WIDTH \
   --height $HEIGHT \
-  --model_type 'bi'
+  --model_type 'bi' --offloading --group_offloading
 
 # inference with autoregressive model
 #torchrun --nproc_per_node=$N_INFERENCE_GPU generate.py  \

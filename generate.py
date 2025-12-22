@@ -32,8 +32,23 @@ from hyvideo.pipelines.worldplay_video_pipeline import HunyuanVideo_1_5_Pipeline
 from hyvideo.commons.parallel_states import initialize_parallel_state
 from hyvideo.commons.infer_state import initialize_infer_state
 
-parallel_dims = initialize_parallel_state(sp=int(os.environ.get('WORLD_SIZE', '1')))
-torch.xpu.set_device(int(os.environ.get('LOCAL_RANK', '0')))
+# parallel_dims = initialize_parallel_state(sp=int(os.environ.get('WORLD_SIZE', '1')))
+# torch.xpu.set_device(int(os.environ.get('LOCAL_RANK', '0')))
+
+import torch.distributed as dist
+local_rank = int(os.environ.get('LOCAL_RANK', '0'))
+world_size = int(os.environ.get('WORLD_SIZE', '1'))
+from datetime import timedelta
+
+dist.init_process_group(
+    "xccl",
+    rank=local_rank,
+    world_size=world_size,
+    timeout=timedelta(minutes=1),
+    # device_id=self.device
+)
+torch.xpu.set_device(int(os.environ.get("LOCAL_RANK", "0")))
+parallel_dims = initialize_parallel_state(sp=int(os.environ.get("WORLD_SIZE", "1")))
 
 mapping = {
             (0,0,0,0): 0,
