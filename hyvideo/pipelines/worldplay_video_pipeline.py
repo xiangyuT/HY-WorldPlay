@@ -880,7 +880,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             ref_images_pixel_values = ref_image_transform(reference_image)
             ref_images_pixel_values = ref_images_pixel_values.unsqueeze(0).unsqueeze(2).to(self.execution_device)
             
-            with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=True):
+            with torch.autocast(device_type="xpu", dtype=torch.float16, enabled=True):
                 cond_latents = self.vae.encode(ref_images_pixel_values).latent_dist.mode()
                 cond_latents.mul_(self.vae.config.scaling_factor)
             
@@ -943,7 +943,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         positive_idx = 1 if self.do_classifier_free_guidance else 0
         stabilization_level = 15
         # text, siglip, byt5 embedding cache
-        with (torch.autocast(device_type="cuda", dtype=self.target_dtype, enabled=self.autocast_enabled),
+        with (torch.autocast(device_type="xpu", dtype=self.target_dtype, enabled=self.autocast_enabled),
               auto_offload_model(self.transformer, self.execution_device, enabled=self.enable_offloading)):
             extra_kwargs_pos = {
                 "byt5_text_states": extra_kwargs["byt5_text_states"][positive_idx, None, ...],
@@ -1015,7 +1015,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                 context_timestep = torch.full((len(selected_frame_indices),), stabilization_level - 1,
                                               device=device, dtype=timesteps.dtype)
                 # compute kv cache
-                with (torch.autocast(device_type="cuda", dtype=self.target_dtype, enabled=self.autocast_enabled),
+                with (torch.autocast(device_type="xpu", dtype=self.target_dtype, enabled=self.autocast_enabled),
                       auto_offload_model(self.transformer, self.execution_device,enabled=self.enable_offloading)):
                     self._kv_cache = self.transformer(
                         bi_inference=False,
@@ -1073,7 +1073,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                     latents_concat = torch.concat([latent_model_input, cond_latents_input], dim=1)
                     latents_concat = self.scheduler.scale_model_input(latents_concat, t)
 
-                    with torch.autocast(device_type="cuda", dtype=self.target_dtype, enabled=self.autocast_enabled):
+                    with torch.autocast(device_type="xpu", dtype=self.target_dtype, enabled=self.autocast_enabled):
                         noise_pred = self.transformer(
                             bi_inference=False,
                             ar_txt_inference=False,
@@ -1208,7 +1208,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                     Ks_input = repeat(Ks_input, 'B L H W -> (B R) L H W', R=batch_size).to(device)
                     action_input = repeat(action_input, 'B L -> (B R) L', R=batch_size).reshape(-1).to(device)
 
-                    with torch.autocast(device_type="cuda", dtype=self.target_dtype, enabled=self.autocast_enabled):
+                    with torch.autocast(device_type="xpu", dtype=self.target_dtype, enabled=self.autocast_enabled):
                         output = self.transformer(
                             bi_inference=True,
                             ar_txt_inference=False,
@@ -1637,7 +1637,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
 
             if return_pre_sr_video or not enable_sr:
-                with (torch.autocast(device_type="cuda", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
+                with (torch.autocast(device_type="xpu", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
                       auto_offload_model(self.vae, self.execution_device, enabled=self.enable_offloading)):
                     video_frames = self.vae.decode(latents, return_dict=False, generator=generator)[0]
 
@@ -1706,7 +1706,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             byt5_tokenizer=self.byt5_tokenizer,
             byt5_max_length=self.byt5_max_length,
             prompt_format=self.prompt_format,
-            execution_device='cuda',
+            execution_device='xpu',
             vision_encoder=self.vision_encoder,
             enable_offloading=self.enable_offloading,
             **SR_PIPELINE_CONFIGS[sr_version],
@@ -1736,7 +1736,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             device = torch.device('cpu')
         else:
             if device is None:
-                device = torch.device('cuda')
+                device = torch.device('xpu')
 
         if enable_group_offloading:
             # Assuming the user does not have sufficient GPU memory, we initialize the models on CPU
@@ -1776,7 +1776,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         if force_sparse_attn:
             if not is_sparse_attn_supported():
                 raise RuntimeError(
-                    f"Current GPU is {torch.cuda.get_device_properties(0).name}, "
+                    f"Current GPU is {torch.xpu.get_device_properties(0).name}, "
                     f"which does not support sparse attention."
                 )
             if transformer.config.attn_mode != 'flex-block-attn':
@@ -1792,7 +1792,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         vision_encoder = cls._load_vision_encoder(cached_folder, device=device)
 
         group_offloading_kwargs = {
-            'onload_device': torch.device('cuda'),
+            'onload_device': torch.device('xpu'),
             'num_blocks_per_group': 4,
         }
         if overlap_group_offloading:
@@ -1816,7 +1816,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             byt5_tokenizer=byt5_kwargs["byt5_tokenizer"],
             byt5_max_length=byt5_kwargs["byt5_max_length"],
             prompt_format=prompt_format,
-            execution_device='cuda',
+            execution_device='xpu',
             vision_encoder=vision_encoder,
             enable_offloading=enable_offloading,
             **PIPELINE_CONFIGS[transformer_version],

@@ -70,7 +70,7 @@ def create_byt5(args, device):
 
     # Load custom checkpoint if provided
     if args['byT5_ckpt_path'] is not None:
-        if "cuda" not in str(device):
+        if "xpu" not in str(device):
             byt5_state_dict = torch.load(args['byT5_ckpt_path'], map_location=device)
         else:
             byt5_state_dict = torch.load(args['byT5_ckpt_path'], map_location=device)
@@ -165,7 +165,7 @@ def load_byt5_and_byt5_tokenizer(
         cache_dir=huggingface_cache_dir,
     ).get_encoder()
 
-    if "cuda" not in str(device):
+    if "xpu" not in str(device):
         device = torch.device(device)
     else:
         device = torch.device(device)

@@ -31,7 +31,7 @@ class ParallelDims:
                 self.world_size = dist.get_world_size()
             else:
                 self.world_size = int(os.getenv("WORLD_SIZE", "1"))
-        self.build_mesh("cuda")
+        self.build_mesh("xpu")
 
     def build_mesh(self, device_type):
         assert self.world_size % self.sp == 0, "world_size must be divisible by sp"

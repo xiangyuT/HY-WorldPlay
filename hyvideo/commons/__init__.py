@@ -132,6 +132,7 @@ TRANSFORMER_VERSION_TO_SR_VERSION = {
 }
 
 def is_flash2_available():
+    return False
     try:
         from flash_attn import flash_attn_varlen_qkvpacked_func
         return True
@@ -139,6 +140,7 @@ def is_flash2_available():
         return False
 
 def is_flash3_available():
+    return False
     try:
         from flash_attn_interface import flash_attn_varlen_func as flash_attn_varlen_func_v3  # noqa: F401
         return True
@@ -146,12 +148,15 @@ def is_flash3_available():
         return False
 
 def is_flash_available():
+    return False
     return is_flash2_available() or is_flash3_available()
 
 def is_sparse_attn_supported():
+    return False
     return 'nvidia h' in torch.cuda.get_device_properties(0).name.lower()
 
 def is_sparse_attn_available():
+    return False
     if not is_sparse_attn_supported():
         return False
     try:
@@ -228,12 +233,13 @@ def auto_offload_model(models, device, enabled=True):
                 model.to(torch.device('cpu'))
 
 def get_gpu_memory(device=None):
-    if not torch.cuda.is_available():
+    return 20 * 1024 * 1024 * 1024
+    if not torch.xpu.is_available():
         return 0
-    device = device if device is not None else torch.cuda.current_device()
-    props = torch.cuda.get_device_properties(device)
-    if hasattr(torch.cuda, 'get_per_process_memory_fraction'):
-        memory_fraction = torch.cuda.get_per_process_memory_fraction()
+    device = device if device is not None else torch.xpu.current_device()
+    props = torch.xpu.get_device_properties(device)
+    if hasattr(torch.xpu, 'get_per_process_memory_fraction'):
+        memory_fraction = torch.xpu.get_per_process_memory_fraction()
     else:
         memory_fraction = 1.0
     return props.total_memory * memory_fraction

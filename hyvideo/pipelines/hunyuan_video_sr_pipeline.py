@@ -403,7 +403,7 @@ class HunyuanVideo_1_5_SR_Pipeline(HunyuanVideo_1_5_Pipeline):
                     else None
                 )
 
-                with torch.autocast(device_type="cuda", dtype=self.target_dtype, enabled=self.autocast_enabled):
+                with torch.autocast(device_type="xpu", dtype=self.target_dtype, enabled=self.autocast_enabled):
                     output = self.transformer(
                         latent_model_input,
                         t_expand,
@@ -456,7 +456,7 @@ class HunyuanVideo_1_5_SR_Pipeline(HunyuanVideo_1_5_Pipeline):
 
             if hasattr(self.vae, 'enable_tile_parallelism'):
                 self.vae.enable_tile_parallelism()
-            with (torch.autocast(device_type="cuda", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
+            with (torch.autocast(device_type="xpu", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
                   auto_offload_model(self.vae, self.execution_device, enabled=self.enable_offloading)):
                 self.vae.enable_tiling()
                 video_frames = self.vae.decode(latents, return_dict=False, generator=generator)[0]

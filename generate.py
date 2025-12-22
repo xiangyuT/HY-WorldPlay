@@ -33,7 +33,7 @@ from hyvideo.commons.parallel_states import initialize_parallel_state
 from hyvideo.commons.infer_state import initialize_infer_state
 
 parallel_dims = initialize_parallel_state(sp=int(os.environ.get('WORLD_SIZE', '1')))
-torch.cuda.set_device(int(os.environ.get('LOCAL_RANK', '0')))
+torch.xpu.set_device(int(os.environ.get('LOCAL_RANK', '0')))
 
 mapping = {
             (0,0,0,0): 0,

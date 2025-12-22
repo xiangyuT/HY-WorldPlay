@@ -10,9 +10,9 @@ SEED=1
 ASPECT_RATIO=16:9
 RESOLUTION=480p                  # Now we only provide the 480p model
 OUTPUT_PATH=./outputs/
-MODEL_PATH=                      # Path to pretrained hunyuanvideo-1.5 model
+MODEL_PATH=/llm/models/HunyuanVideo-1.5/                      # Path to pretrained hunyuanvideo-1.5 model
 AR_ACTION_MODEL_PATH=            # Path to our HY-World 1.5 autoregressive checkpoints
-BI_ACTION_MODEL_PATH=            # Path to our HY-World 1.5 bidirectional checkpoints
+BI_ACTION_MODEL_PATH=/llm/models/HY-WorldPlay/bidirectional_model.safe_tensors            # Path to our HY-World 1.5 bidirectional checkpoints
 AR_DISTILL_ACTION_MODEL_PATH=    # Path to our HY-World 1.5 autoregressive distilled checkpoints
 POSE_JSON_PATH=./assets/pose/test_forward_32_latents.json   # Path to the customized camera trajectory
 NUM_FRAMES=125
@@ -21,7 +21,7 @@ HEIGHT=480
 
 # Configuration for faster inference
 # The maximum number recommended is 8.
-N_INFERENCE_GPU=8 # Parallel inference GPU count.
+N_INFERENCE_GPU=4 # Parallel inference GPU count.
 
 # Configuration for better quality
 REWRITE=false # Enable prompt rewriting. Please ensure rewrite vLLM server is deployed and configured.
