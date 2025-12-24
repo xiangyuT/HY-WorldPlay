@@ -15,7 +15,7 @@ AR_ACTION_MODEL_PATH=            # Path to our HY-World 1.5 autoregressive check
 BI_ACTION_MODEL_PATH=/llm/models/HY-WorldPlay/bidirectional_model.safe_tensors            # Path to our HY-World 1.5 bidirectional checkpoints
 AR_DISTILL_ACTION_MODEL_PATH=    # Path to our HY-World 1.5 autoregressive distilled checkpoints
 POSE_JSON_PATH=./assets/pose/test_forward_32_latents.json   # Path to the customized camera trajectory
-NUM_FRAMES=125
+NUM_FRAMES=125     # 恢复原帧数，使用 chunked attention 减少显存
 WIDTH=832
 HEIGHT=480
 
@@ -46,7 +46,9 @@ torchrun --nproc_per_node=$N_INFERENCE_GPU generate.py  \
   --few_step true \
   --width $WIDTH \
   --height $HEIGHT \
-  --model_type 'bi' --offloading --group_offloading
+  --model_type 'bi' --offloading \
+  --chunked_attn true \
+  --attn_chunk_size 2048
 
 # inference with autoregressive model
 #torchrun --nproc_per_node=$N_INFERENCE_GPU generate.py  \

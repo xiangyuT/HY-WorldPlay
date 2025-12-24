@@ -156,7 +156,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             self.byt5_model = None
             self.byt5_tokenizer = None
 
-
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
         self.text_len = text_encoder.max_length
@@ -179,7 +178,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             "720p": {"bucket_hw_base_size": 960, "bucket_hw_bucket_stride": 16},
             "1080p": {"bucket_hw_base_size": 1440, "bucket_hw_bucket_stride": 16},
         }
-
 
     @classmethod
     def _create_scheduler(cls, flow_shift):
@@ -220,7 +218,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                 )
                 byT5_google_path = "google/byt5-small"
 
-
             multilingual_prompt_format_color_path = os.path.join(glyph_root, "assets/color_idx.json")
             multilingual_prompt_format_font_path = os.path.join(glyph_root, "assets/multilingual_10-lang_idx.json")
 
@@ -240,7 +237,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             return byt5_kwargs, prompt_format
         except Exception as e:
             raise RuntimeError("Error loading byT5 glyph processor") from e
-
 
     def encode_prompt(
         self,
@@ -411,7 +407,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             negative_attention_mask,
         )
 
-
     def prepare_extra_func_kwargs(self, func, kwargs):
         """
         Prepare extra keyword arguments for scheduler functions.
@@ -426,7 +421,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             if accepts:
                 extra_step_kwargs[k] = v
         return extra_step_kwargs
-
 
     def prepare_latents(
         self,
@@ -606,23 +600,23 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         """
         byt5_embeddings = torch.zeros((1, self.byt5_max_length, 1472), device=device)
         byt5_mask = torch.zeros((1, self.byt5_max_length), device=device, dtype=torch.int64)
-        
+
         glyph_texts = self._extract_glyph_texts(prompt_text)
-        
+
         if len(glyph_texts) > 0:
             text_styles = [{'color': None, 'font-family': None} for _ in range(len(glyph_texts))]
             formatted_text = self.prompt_format.format_prompt(glyph_texts, text_styles)
-            
+
             text_ids, text_mask = self.get_byt5_text_tokens(
                 self.byt5_tokenizer, self.byt5_max_length, formatted_text
             )
             text_ids = text_ids.to(device=device)
             text_mask = text_mask.to(device=device)
-            
+
             byt5_outputs = self.byt5_model(text_ids, attention_mask=text_mask.float())
             byt5_embeddings = byt5_outputs[0]
             byt5_mask = text_mask
-            
+
         return byt5_embeddings, byt5_mask
 
     def _prepare_byt5_embeddings(self, prompts, device):
@@ -641,7 +635,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         """
         if not self.config.glyph_byT5_v2:
             return {}
-            
+
         if isinstance(prompts, str):
             prompt_list = [prompts]
         elif isinstance(prompts, list):
@@ -666,11 +660,11 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
         byt5_positive = torch.cat(positive_embeddings, dim=0)
         byt5_positive_mask = torch.cat(positive_masks, dim=0)
-        
+
         if self.do_classifier_free_guidance:
             byt5_negative = torch.cat(negative_embeddings, dim=0)
             byt5_negative_mask = torch.cat(negative_masks, dim=0)
-            
+
             byt5_embeddings = torch.cat([byt5_negative, byt5_positive], dim=0)
             byt5_masks = torch.cat([byt5_negative_mask, byt5_positive_mask], dim=0)
         else:
@@ -733,11 +727,11 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                 vision_states = vision_states.last_hidden_state.to(device=device, dtype=self.target_dtype)
             else:
                 vision_states = None
-        
+
         # Repeat image features for batch size if needed (for classifier-free guidance)
         if self.do_classifier_free_guidance and vision_states is not None:
             vision_states = vision_states.repeat(2, 1, 1)
-        
+
         return vision_states
 
     def _prepare_cond_latents(self, task_type, cond_latents, latents, multitask_mask):
@@ -757,7 +751,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         """
         latents_concat = None
         mask_concat = None
-        
+
         if cond_latents is not None and task_type == 'i2v':
             latents_concat = cond_latents.repeat(1, 1, latents.shape[2], 1, 1)
             latents_concat[:, :, 1:, :, :] = 0.0
@@ -769,7 +763,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                                     latents.shape[3], 
                                     latents.shape[4]
                                     ).to(latents.device)
-        
+
         mask_zeros = torch.zeros(latents.shape[0], 1, latents.shape[2], latents.shape[3], latents.shape[4])
         mask_ones = torch.ones(latents.shape[0], 1, latents.shape[2], latents.shape[3], latents.shape[4])
         mask_concat = merge_tensor_by_mask(
@@ -780,7 +774,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                                         ).to(device=latents.device)
 
         cond_latents = torch.concat([latents_concat, mask_concat], dim=1)
-        
+
         return cond_latents
 
     def get_task_mask(self, task_type, latent_target_length):
@@ -823,7 +817,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
         return self.get_closest_resolution_given_original_size(origin_size, target_resolution)
 
-
     def get_closest_resolution_given_original_size(
                                                 self, 
                                                 origin_size, 
@@ -861,14 +854,14 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
         elif task_type == "i2v":
             origin_size = reference_image.size
-            
+
             target_height, target_width = height, width
             original_width, original_height = origin_size
-            
+
             scale_factor = max(target_width / original_width, target_height / original_height)
             resize_width = int(round(original_width * scale_factor))
             resize_height = int(round(original_height * scale_factor))
-            
+
             ref_image_transform = transforms.Compose([
                 transforms.Resize((resize_height, resize_width),
                                   interpolation=transforms.InterpolationMode.LANCZOS),
@@ -876,17 +869,17 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5])
             ])
-            
+
             ref_images_pixel_values = ref_image_transform(reference_image)
             ref_images_pixel_values = ref_images_pixel_values.unsqueeze(0).unsqueeze(2).to(self.execution_device)
-            
+
             with torch.autocast(device_type="xpu", dtype=torch.float16, enabled=True):
                 cond_latents = self.vae.encode(ref_images_pixel_values).latent_dist.mode()
                 cond_latents.mul_(self.vae.config.scaling_factor)
-            
+
         else:
             raise ValueError(f"Unsupported task_type: {task_type}. Must be 't2v' or 'i2v'")
-        
+
         return cond_latents
 
     @property
@@ -1204,6 +1197,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                     batch_size = latents_concat.shape[0]
                     t_expand_txt = t.repeat(batch_size)
                     t_expand = timestep_input.repeat(batch_size)
+                    torch.xpu.empty_cache()
                     viewmats_input = repeat(viewmats_input, 'B L H W -> (B R) L H W', R=batch_size).to(device)
                     Ks_input = repeat(Ks_input, 'B L H W -> (B R) L H W', R=batch_size).to(device)
                     action_input = repeat(action_input, 'B L -> (B R) L', R=batch_size).reshape(-1).to(device)
@@ -1244,6 +1238,12 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
                     latent_model_input = self.scheduler.step(noise_pred, t, latent_model_input, return_dict=False)[0]
                     latents[:, :, start_idx: end_idx] = latent_model_input[:, :, -self.chunk_latent_frames:]
+                    
+                    # Clear intermediate variables and cache to reduce memory pressure
+                    del noise_pred, viewmats_input, Ks_input, action_input, latents_concat
+                    if self.do_classifier_free_guidance:
+                        del noise_pred_uncond, noise_pred_text
+                    torch.xpu.empty_cache()
 
                     # Update progress bar
                     if i == len(timesteps) - 1 or ((i + 1) > self.num_warmup_steps
@@ -1392,7 +1392,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                 except Exception as e:
                     loguru.logger.warning(f"Failed to rewrite prompt: {e}")
                     prompt = user_prompt
-                
+
             if dist.is_initialized() and get_parallel_state().sp_enabled:
                 obj_list = [prompt]
                 # not use group_src to support old PyTorch
@@ -1444,7 +1444,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
         latent_target_length, latent_height, latent_width = self.get_latent_size(video_length, height, width)
         n_tokens = latent_target_length * latent_height * latent_width
         multitask_mask = self.get_task_mask(task_type, latent_target_length)
-
 
         self._guidance_scale = guidance_scale
         self._guidance_rescale = kwargs.get("guidance_rescale", 0.0)
@@ -1593,6 +1592,7 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
                                       action=action,
                                       device=device)
         elif model_type == "bi":
+            torch.xpu.empty_cache()
             latents = self.bi_rollout(latents=latents,
                                       timesteps=timesteps,
                                       prompt_embeds=prompt_embeds,
@@ -1635,15 +1635,38 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             else:
                 latents = latents / self.vae.config.scaling_factor
 
-
             if return_pre_sr_video or not enable_sr:
-                with (torch.autocast(device_type="xpu", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
-                      auto_offload_model(self.vae, self.execution_device, enabled=self.enable_offloading)):
-                    video_frames = self.vae.decode(latents, return_dict=False, generator=generator)[0]
+                # Enable spatial tiling with smaller tile size to reduce memory usage during VAE decode
+                self.vae.enable_spatial_tiling(use_tiling=True)
+                # Set smaller tile size for memory efficiency (default may be too large)
+                # tile_sample_min_size=256 means each tile is 256x256 in pixel space
+                # which is 32x32 in latent space (256/8=32)
+                self.vae.set_tile_sample_min_size(sample_size=256, tile_overlap_factor=0.25)
+                
+                # Only decode on rank 0 to save memory, then broadcast
+                parallel_dims = get_parallel_state()
+                if parallel_dims.sp_enabled:
+                    # Only rank 0 does VAE decode
+                    if dist.get_rank() == 0:
+                        with (torch.autocast(device_type="xpu", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
+                              auto_offload_model(self.vae, self.execution_device, enabled=self.enable_offloading)):
+                            torch.xpu.empty_cache()
+                            video_frames = self.vae.decode(latents, return_dict=False, generator=generator)[0]
+                        if video_frames is not None:
+                            video_frames = (video_frames / 2 + 0.5).clamp(0, 1).cpu().float()
+                    else:
+                        video_frames = None
+                    # Synchronize
+                    dist.barrier()
+                else:
+                    with (torch.autocast(device_type="xpu", dtype=self.vae_dtype, enabled=self.vae_autocast_enabled),
+                          auto_offload_model(self.vae, self.execution_device, enabled=self.enable_offloading)):
+                        torch.xpu.empty_cache()
+                        video_frames = self.vae.decode(latents, return_dict=False, generator=generator)[0]
 
-                if video_frames is not None:
-                    video_frames = (video_frames / 2 + 0.5).clamp(0, 1).cpu().float()
-                    
+                    if video_frames is not None:
+                        video_frames = (video_frames / 2 + 0.5).clamp(0, 1).cpu().float()
+
             else:
                 video_frames = sr_out.videos
 
@@ -1685,7 +1708,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
     def create_sr_pipeline(self, cached_folder, sr_version, transformer_dtype=torch.bfloat16, device=None):
         from .hunyuan_video_sr_pipeline import HunyuanVideo_1_5_SR_Pipeline
-
 
         transformer, upsampler = self.load_sr_transformer_upsampler(
                                                                 cached_folder, 
@@ -1767,10 +1789,14 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
         transformer = transformer.to(transformer_dtype).to(transformer_init_device)
 
-        vae = hunyuanvideo_15_vae_w_cache.AutoencoderKLConv3D.from_pretrained(
-            os.path.join(cached_folder, "vae"), 
-            torch_dtype=vae_inference_config['dtype']
-        ).to(device)
+        vae = (
+            hunyuanvideo_15_vae_w_cache.AutoencoderKLConv3D.from_pretrained(
+                os.path.join(cached_folder, "vae"),
+                torch_dtype=vae_inference_config["dtype"],
+            )
+            .to(transformer_dtype)
+            .to(device)
+        )
         scheduler = FlowMatchDiscreteScheduler.from_pretrained(os.path.join(cached_folder, "scheduler"))
 
         if force_sparse_attn:
@@ -1835,7 +1861,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
 
         return pipeline
 
-
     @staticmethod
     def get_vae_inference_config(memory_limitation=None):
         if memory_limitation is None:
@@ -1850,7 +1875,6 @@ class HunyuanVideo_1_5_Pipeline(DiffusionPipeline):
             tile_overlap_factor = 0.25
             dtype = torch.float32
         return {'sample_size': sample_size, 'tile_overlap_factor': tile_overlap_factor, 'dtype': dtype}
-
 
     @classmethod
     def _load_text_encoders(cls, pretrained_model_path, device):

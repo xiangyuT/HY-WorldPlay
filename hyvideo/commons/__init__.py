@@ -211,6 +211,13 @@ def maybe_fallback_attn_mode(attn_mode, infer_state=None, block_idx=None):
         if not is_flash2_available():
             warnings.warn("flash2 is not available. Falling back to torch attention.")
             attn_mode = 'torch'
+    
+    # Use chunked attention for memory efficiency if configured (after flash fallback)
+    if infer_state is not None and infer_state.enable_chunked_attn:
+        if attn_mode == 'torch':
+            attn_mode = 'torch_chunked'
+            return attn_mode
+    
     if attn_mode in ('flex-block-attn'):
         from hyvideo.commons import is_sparse_attn_available
         if not is_sparse_attn_available():

@@ -17,6 +17,7 @@
 from typing import Any, Tuple
 import torch
 import torch.distributed as dist
+from torch.distributed._functional_collectives import all_to_all_single as ft_all_to_all_single
 
 from torch.nn import functional as F
 
@@ -76,11 +77,18 @@ def _all_to_all_4D(
             .contiguous()
         )
 
-        output = torch.empty_like(input_t)
         # https://pytorch.org/docs/stable/distributed.html#torch.distributed.all_to_all_single
         # (P, seq_len/P, bs, hc/P, hs) scatter seqlen -all2all-> (P, seq_len/P, bs, hc/P, hs) scatter head
         if seq_world_size > 1:
-            dist.all_to_all_single(output, input_t, group=group)
+            # Use functional_collectives version to avoid XCCL IPC issues
+            input_flat = input_t.reshape(-1)
+            output_flat = ft_all_to_all_single(
+                input_flat,
+                output_split_sizes=None,
+                input_split_sizes=None,
+                group=group
+            )
+            output = output_flat.reshape(input_t.shape)
         else:
             output = input_t
         # if scattering the seq-dim, transpose the heads back to the original dimension
@@ -123,11 +131,18 @@ def _all_to_all_4D(
             .reshape(seq_world_size, shard_hc, shard_seqlen, bs, hs)
         )
 
-        output = torch.empty_like(input_t)
         # https://pytorch.org/docs/stable/distributed.html#torch.distributed.all_to_all_single
         # (P, bs x hc/P, seqlen/P, hs) scatter seqlen -all2all-> (P, bs x seq_len/P, hc/P, hs) scatter head
         if seq_world_size > 1:
-            dist.all_to_all_single(output, input_t, group=group)
+            # Use functional_collectives version to avoid XCCL IPC issues
+            input_flat = input_t.reshape(-1)
+            output_flat = ft_all_to_all_single(
+                input_flat,
+                output_split_sizes=None,
+                input_split_sizes=None,
+                group=group
+            )
+            output = output_flat.reshape(input_t.shape)
         else:
             output = input_t
 
@@ -262,6 +277,8 @@ class _AllGather(torch.autograd.Function):
         dist.all_gather(tensor_list, input_, group=group)
 
         output = torch.cat(tensor_list, dim=dim)
+        # Explicitly delete tensor_list to free memory
+        del tensor_list
         return output
 
     @staticmethod

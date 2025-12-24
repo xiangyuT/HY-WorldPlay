@@ -138,7 +138,7 @@ def pose_to_input(pose_json_path, latent_chunk_num, tps=False):
     rotate_one_label = one_hot_to_one_dimension(rotate_one_hot)
     action_one_label = trans_one_label * 9 + rotate_one_label
 
-    return torch.tensor(w2c_list), torch.tensor(intrinsic_list), action_one_label
+    return torch.from_numpy(w2c_list), intrinsic_list, action_one_label
 
 def save_video(video, path):
     if video.ndim == 5:
@@ -363,6 +363,15 @@ def main():
     parser.add_argument(
         '--width', type=int, default=None,
         help='width for generation (recommended to set as 832)'
+    )
+    parser.add_argument(
+        '--chunked_attn', type=str_to_bool, nargs='?', const=True, default=False,
+        help='Enable chunked attention for memory efficiency (default: false). '
+             'Use --chunked_attn or --chunked_attn true/1 to enable'
+    )
+    parser.add_argument(
+        '--attn_chunk_size', type=int, default=8192,
+        help='Chunk size for chunked attention (default: 8192). Smaller = less memory but slower'
     )
 
     args = parser.parse_args()

@@ -47,6 +47,75 @@ from hyvideo.models.transformers.modules.ssta_attention import ssta_3d_attention
 from hyvideo.commons.infer_state import get_infer_state
 
 
+def chunked_sdpa(
+    query: torch.Tensor,
+    key: torch.Tensor, 
+    value: torch.Tensor,
+    chunk_size: int = 4096,
+    attn_mask: Optional[torch.Tensor] = None,
+) -> torch.Tensor:
+    """
+    Memory-efficient chunked scaled dot-product attention.
+    将 Query 分块计算，减少峰值显存使用。
+    
+    Args:
+        query: [B, H, L_q, D]
+        key: [B, H, L_kv, D]  
+        value: [B, H, L_kv, D]
+        chunk_size: Query 分块大小
+        attn_mask: Optional attention mask
+        
+    Returns:
+        output: [B, H, L_q, D]
+    """
+    B, H, L_q, D = query.shape
+    L_kv = key.shape[2]
+    
+    # 如果序列长度小于 chunk_size，直接用标准 SDPA
+    if L_q <= chunk_size:
+        return F.scaled_dot_product_attention(
+            query, key, value,
+            attn_mask=attn_mask,
+            dropout_p=0.0,
+            is_causal=False
+        )
+    
+    # 分块计算
+    outputs = []
+    num_chunks = (L_q + chunk_size - 1) // chunk_size
+    
+    for i in range(num_chunks):
+        start_idx = i * chunk_size
+        end_idx = min(start_idx + chunk_size, L_q)
+        
+        q_chunk = query[:, :, start_idx:end_idx, :]
+        
+        # 处理 mask（如果有）
+        chunk_mask = None
+        if attn_mask is not None:
+            # attn_mask shape: [B, 1, L_q, L_kv] or [B, 1, L_q, 1] & [B, 1, 1, L_kv]
+            if attn_mask.dim() == 4:
+                chunk_mask = attn_mask[:, :, start_idx:end_idx, :]
+        
+        # 计算当前 chunk 的注意力
+        out_chunk = F.scaled_dot_product_attention(
+            q_chunk, key, value,
+            attn_mask=chunk_mask,
+            dropout_p=0.0,
+            is_causal=False
+        )
+        outputs.append(out_chunk)
+        
+        # 释放中间变量
+        del q_chunk, out_chunk
+        if chunk_mask is not None:
+            del chunk_mask
+    
+    # 拼接结果
+    output = torch.cat(outputs, dim=2)
+    return output
+
+
 
 @torch.compiler.disable
 def attention(
@@ -269,6 +338,9 @@ def sequence_parallel_attention(q, k, v,
     query, encoder_query = q
     key, encoder_key = k
     value, encoder_value = v
+    
+    # Save original dtype for later use (before query is deleted)
+    original_dtype = query.dtype
 
     parallel_dims = get_parallel_state()
     enable_sp = parallel_dims.sp_enabled
@@ -322,6 +394,7 @@ def sequence_parallel_attention(q, k, v,
                 attn_mask = attn_mask.to(query.dtype)
                 raise NotImplementedError(f'Float attention mask is not implemented for torch attention.')
             
+        torch.xpu.empty_cache()
         # transpose q,k,v dim to fit scaled_dot_product_attention
         query = query.transpose(1, 2)  # B * Head_num * length * dim
         key = key.transpose(1, 2)      # B * Head_num * length * dim
@@ -338,6 +411,41 @@ def sequence_parallel_attention(q, k, v,
                                                     dropout_p=0.0, 
                                                     is_causal=False
                                                     )
+        
+        # transpose back
+        hidden_states = hidden_states.transpose(1, 2)
+
+    # Memory-efficient chunked attention
+    elif attn_mode == "torch_chunked":
+        query = torch.cat([query, encoder_query], dim=1)
+        key = torch.cat([key, encoder_key], dim=1)
+        value = torch.cat([value, encoder_value], dim=1)
+        if text_mask is not None:
+            attn_mask = F.pad(text_mask, (sequence_length, 0), value=True)
+        else:
+            attn_mask = None
+
+        if attn_mask is not None:
+            if attn_mask.dtype != torch.bool and attn_mask.dtype in [torch.int64, torch.int32]:
+                attn_mask = attn_mask.to(torch.bool)
+            
+        torch.xpu.empty_cache()
+        # transpose q,k,v dim to fit scaled_dot_product_attention
+        query = query.transpose(1, 2)  # B * Head_num * length * dim
+        key = key.transpose(1, 2)      # B * Head_num * length * dim
+        value = value.transpose(1, 2)  # B * Head_num * length * dim
+        if attn_mask is not None:
+            attn_mask1 = einops.rearrange(attn_mask, 'b l -> b 1 l 1')
+            attn_mask2 = einops.rearrange(attn_mask1, 'b 1 l 1 -> b 1 1 l')
+            attn_mask = attn_mask1 & attn_mask2
+        
+        # 使用分块注意力，chunk_size 从 infer_state 获取
+        chunk_size = get_infer_state().attn_chunk_size if get_infer_state() else 2048
+        hidden_states = chunked_sdpa(
+            query, key, value,
+            chunk_size=chunk_size,
+            attn_mask=attn_mask,
+        )
         
         # transpose back
         hidden_states = hidden_states.transpose(1, 2)
@@ -476,15 +584,20 @@ def sequence_parallel_attention(q, k, v,
             f'Unsupported attention mode: {attn_mode}.'
         )
 
+    # Free intermediate variables to reduce memory pressure before all_gather
+    del query, key, value, encoder_query, encoder_key, encoder_value
+    torch.xpu.empty_cache()
 
     if enable_sp:
         hidden_states, encoder_hidden_states = hidden_states.split_with_sizes(
                                                                         (sequence_length, encoder_sequence_length), 
                                                                         dim=1)
         hidden_states = all_to_all_4D(hidden_states, sp_group, scatter_dim=1, gather_dim=2)
+        # Clear cache before all_gather to ensure memory is available
+        torch.xpu.empty_cache()
         encoder_hidden_states = all_gather(encoder_hidden_states, dim=2, group=sp_group).contiguous()
-        hidden_states = hidden_states.to(query.dtype)
-        encoder_hidden_states = encoder_hidden_states.to(query.dtype)
+        hidden_states = hidden_states.to(original_dtype)
+        encoder_hidden_states = encoder_hidden_states.to(original_dtype)
         hidden_states = torch.cat([hidden_states, encoder_hidden_states], dim=1)
 
     b, s, a, d = hidden_states.shape

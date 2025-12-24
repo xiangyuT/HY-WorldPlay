@@ -942,8 +942,30 @@ class AutoencoderKLConv3D(ModelMixin, ConfigMixin):
             row = []
             for j in range(0, W, overlap_size):
                 tile = z[:, :, :, i: i + self.tile_latent_min_size, j: j + self.tile_latent_min_size]
-                decoded = self.decoder(tile)
+                # Decode tile frame by frame to save memory
+                self.clear_cache()
+                decoded_frames = []
+                for t in range(T):
+                    self._conv_idx = [0]
+                    if t == 0:
+                        frame_out = self.decoder(
+                            tile[:, :, t:t+1, :, :], 
+                            feat_cache=self._feat_map, 
+                            feat_idx=self._conv_idx, 
+                            first_chunk=True
+                        )
+                    else:
+                        frame_out = self.decoder(
+                            tile[:, :, t:t+1, :, :], 
+                            feat_cache=self._feat_map, 
+                            feat_idx=self._conv_idx
+                        )
+                    decoded_frames.append(frame_out)
+                decoded = torch.cat(decoded_frames, dim=2)
+                self.clear_cache()
                 row.append(decoded)
+                # Free memory after each tile
+                torch.xpu.empty_cache()
             rows.append(row)
 
         result_rows = []

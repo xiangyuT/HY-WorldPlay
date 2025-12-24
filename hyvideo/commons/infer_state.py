@@ -22,6 +22,8 @@ class InferState:
     enable_sageattn: bool = False  # whether to use SageAttention
     sage_blocks_range: Optional[range] = None  # block range to use SageAttention
     enable_torch_compile: bool = False  # whether to use torch compile
+    enable_chunked_attn: bool = False  # whether to use chunked attention for memory efficiency
+    attn_chunk_size: int = 8192  # chunk size for chunked attention
 
 __infer_state = None
 
@@ -37,10 +39,18 @@ def initialize_infer_state(args):
     sage_blocks_range = None
     # Map CLI argument use_sageattn to internal enable_sageattn field
     use_sageattn = False
+    # Enable chunked attention for memory efficiency
+    enable_chunked_attn = getattr(args, 'chunked_attn', False)
+    attn_chunk_size = getattr(args, 'attn_chunk_size', 2048)
+    
+    print(f"[InferState] enable_chunked_attn={enable_chunked_attn}, attn_chunk_size={attn_chunk_size}")
+    
     __infer_state = InferState(
         enable_sageattn = use_sageattn,
         sage_blocks_range = sage_blocks_range,
         enable_torch_compile = args.enable_torch_compile,
+        enable_chunked_attn = enable_chunked_attn,
+        attn_chunk_size = attn_chunk_size,
     )
     return __infer_state
 

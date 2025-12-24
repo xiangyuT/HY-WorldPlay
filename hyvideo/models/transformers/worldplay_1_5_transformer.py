@@ -1326,6 +1326,9 @@ class HunyuanVideo_1_5_DiffusionTransformer(ModelMixin, ConfigMixin):
                     is_flash=force_full_attn,
                     block_idx=index,
                 )
+            # Periodically clear cache to prevent memory accumulation
+            if (index + 1) % 5 == 0:
+                torch.xpu.empty_cache()
 
         # Final Layer
         img = self.final_layer(img, vec)
